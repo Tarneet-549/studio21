@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { RawOrderBookData, OrderBookDisplayData } from '@/types/market-pilot';
@@ -54,6 +55,17 @@ export function OrderBookDisplay({ data, isConnected }: OrderBookDisplayProps) {
     return { asks: processedAsks, bids: processedBids };
   }, [data]);
 
+  const midPrice = useMemo(() => {
+    if (data && data.asks.length > 0 && data.bids.length > 0) {
+      const bestAsk = parseFloat(data.asks[0][0]);
+      const bestBid = parseFloat(data.bids[0][0]);
+      if (!isNaN(bestAsk) && !isNaN(bestBid)) {
+        return ((bestAsk + bestBid) / 2).toFixed(2);
+      }
+    }
+    return null;
+  }, [data]);
+
   if (!isConnected && !data) {
     return (
       <Card className="shadow-lg">
@@ -70,17 +82,6 @@ export function OrderBookDisplay({ data, isConnected }: OrderBookDisplayProps) {
     );
   }
   
-  const midPrice = useMemo(() => {
-    if (data && data.asks.length > 0 && data.bids.length > 0) {
-      const bestAsk = parseFloat(data.asks[0][0]);
-      const bestBid = parseFloat(data.bids[0][0]);
-      if (!isNaN(bestAsk) && !isNaN(bestBid)) {
-        return ((bestAsk + bestBid) / 2).toFixed(2);
-      }
-    }
-    return null;
-  }, [data]);
-
 
   return (
     <Card className="shadow-lg h-full flex flex-col">
@@ -151,3 +152,4 @@ export function OrderBookDisplay({ data, isConnected }: OrderBookDisplayProps) {
     </Card>
   );
 }
+
