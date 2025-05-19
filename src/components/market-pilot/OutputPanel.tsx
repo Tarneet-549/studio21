@@ -1,9 +1,19 @@
+
 "use client";
 
 import type { OutputData } from '@/types/market-pilot';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingDown, Landmark, Activity, DollarSign, Timer, AlertCircle } from "lucide-react";
+import { 
+  TrendingDown, 
+  Landmark, 
+  Activity, 
+  DollarSign, 
+  Timer, 
+  AlertCircle,
+  ClipboardPlus, // Icon for Maker
+  ClipboardMinus // Icon for Taker
+} from "lucide-react";
 
 interface OutputPanelProps {
   outputs: OutputData;
@@ -18,9 +28,10 @@ interface OutputMetricProps {
   unit?: string;
   isLoading: boolean;
   tooltip?: string;
+  isPercentage?: boolean;
 }
 
-const OutputMetric = ({ icon: Icon, label, value, unit, isLoading, tooltip }: OutputMetricProps) => (
+const OutputMetric = ({ icon: Icon, label, value, unit, isLoading, tooltip, isPercentage = false }: OutputMetricProps) => (
   <div className="flex items-center justify-between py-3 border-b last:border-b-0">
     <div className="flex items-center">
       <Icon className="mr-3 h-5 w-5 text-muted-foreground" />
@@ -30,7 +41,9 @@ const OutputMetric = ({ icon: Icon, label, value, unit, isLoading, tooltip }: Ou
       <Skeleton className="h-5 w-20" />
     ) : (
       <span className="text-sm font-semibold text-primary">
-        {value !== null && value !== undefined ? `${value.toFixed(4)}${unit || ''}` : 'N/A'}
+        {value !== null && value !== undefined 
+          ? `${isPercentage ? (value * 100).toFixed(2) : value.toFixed(4)}${unit || ''}` 
+          : 'N/A'}
       </span>
     )}
   </div>
@@ -82,11 +95,27 @@ export function OutputPanel({ outputs, isLoading, error }: OutputPanelProps) {
             isLoading={isLoading && outputs.netCost === null}
           />
           <OutputMetric
+            icon={ClipboardPlus}
+            label="Maker Proportion"
+            value={outputs.makerProportion}
+            unit="%"
+            isLoading={isLoading && outputs.makerProportion === null}
+            isPercentage={true}
+          />
+          <OutputMetric
+            icon={ClipboardMinus}
+            label="Taker Proportion"
+            value={outputs.takerProportion}
+            unit="%"
+            isLoading={isLoading && outputs.takerProportion === null}
+            isPercentage={true}
+          />
+          <OutputMetric
             icon={Timer}
             label="Processing Latency"
             value={outputs.internalLatency}
             unit=" ms"
-            isLoading={false} // This updates after processing, so not during typical 'isLoading'
+            isLoading={false} 
           />
         </div>
       </CardContent>

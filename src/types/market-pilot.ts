@@ -1,3 +1,4 @@
+
 export interface OrderBookLevelData {
   price: string;
   quantity: string;
@@ -25,6 +26,8 @@ export interface OutputData {
   expectedFees: number | null;
   marketImpact: number | null;
   netCost: number | null;
+  makerProportion: number | null;
+  takerProportion: number | null;
   internalLatency: number | null;
 }
 
@@ -33,3 +36,4 @@ export interface OrderBookDisplayData {
   quantity: string;
   total: string;
 }
+

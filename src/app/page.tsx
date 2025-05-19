@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -11,6 +12,7 @@ import { OrderBookDisplay } from '@/components/market-pilot/OrderBookDisplay';
 import type { FormSchemaType, OutputData, RawOrderBookData } from '@/types/market-pilot';
 import { slippagePrediction } from '@/ai/flows/slippage-prediction';
 import { marketImpactEstimation } from '@/ai/flows/market-impact-estimation';
+import { makerTakerPrediction } from '@/ai/flows/maker-taker-prediction';
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
 import { Loader2 } from 'lucide-react';
@@ -35,6 +37,8 @@ export default function MarketPilotPage() {
     expectedFees: null,
     marketImpact: null,
     netCost: null,
+    makerProportion: null,
+    takerProportion: null,
     internalLatency: null,
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -58,10 +62,15 @@ export default function MarketPilotPage() {
 
   const runSimulation = useCallback(async (currentFormData: FormSchemaType, currentOrderBookData: RawOrderBookData | null) => {
     if (!currentOrderBookData) {
-      // Don't run if order book isn't ready, unless it's the initial load for fees.
-      if (outputs.expectedFees === null) { // Initial fee calculation
+      if (outputs.expectedFees === null) { 
          const fees = currentFormData.quantity * currentFormData.feeRate;
-         setOutputs(prev => ({ ...prev, expectedFees: fees, netCost: fees + (prev.expectedSlippage || 0) + (prev.marketImpact || 0) }));
+         setOutputs(prev => ({ 
+           ...prev, 
+           expectedFees: fees, 
+           netCost: fees + (prev.expectedSlippage || 0) + (prev.marketImpact || 0),
+           makerProportion: null, // Reset on no data
+           takerProportion: null, // Reset on no data
+          }));
       }
       return;
     }
@@ -71,7 +80,7 @@ export default function MarketPilotPage() {
     const startTime = performance.now();
 
     try {
-      const { quantity, volatility, feeRate } = currentFormData;
+      const { quantity, volatility, feeRate, orderType } = currentFormData;
 
       // Slippage Prediction
       const slippageInput = {
@@ -86,13 +95,23 @@ export default function MarketPilotPage() {
       const marketImpactInput = {
         orderSize: quantity,
         assetVolatility: volatility,
-        tradeDuration: 1, // Default: 1 day
-        riskAversion: 0.5, // Default
-        temporaryImpactCoefficient: 0.1, // Default
-        permanentImpactCoefficient: 0.1, // Default
+        tradeDuration: 1, 
+        riskAversion: 0.5, 
+        temporaryImpactCoefficient: 0.1, 
+        permanentImpactCoefficient: 0.1, 
       };
       const marketImpactResult = await marketImpactEstimation(marketImpactInput);
       const marketImpact = marketImpactResult.estimatedMarketImpact;
+
+      // Maker/Taker Prediction
+      const makerTakerInput = {
+        orderBookData: currentOrderBookData,
+        quantity,
+        orderType,
+      };
+      const makerTakerResult = await makerTakerPrediction(makerTakerInput);
+      const makerProportion = makerTakerResult.makerProportion;
+      const takerProportion = makerTakerResult.takerProportion;
       
       const expectedFees = quantity * feeRate;
       const netCost = (expectedSlippage || 0) + (expectedFees || 0) + (marketImpact || 0);
@@ -103,6 +122,8 @@ export default function MarketPilotPage() {
         expectedFees,
         marketImpact,
         netCost,
+        makerProportion,
+        takerProportion,
         internalLatency,
       });
 
@@ -115,20 +136,20 @@ export default function MarketPilotPage() {
         description: errorMessage,
         variant: "destructive",
       });
-      // Reset AI-dependent outputs on error
       setOutputs(prev => ({
         ...prev,
         expectedSlippage: null,
         marketImpact: null,
-        netCost: prev.expectedFees, // Keep fees if calculable
+        makerProportion: null,
+        takerProportion: null,
+        netCost: prev.expectedFees, 
         internalLatency: performance.now() - startTime,
       }));
     } finally {
       setIsLoading(false);
     }
-  }, [toast, outputs.expectedFees]); // Added outputs.expectedFees to ensure it's stable for initial fee calc
+  }, [toast, outputs.expectedFees]);
 
-  // Effect for WebSocket errors
   useEffect(() => {
     if (wsError) {
       toast({
@@ -139,27 +160,26 @@ export default function MarketPilotPage() {
     }
   }, [wsError, toast]);
 
-  // Effect for running simulation on form data change (debounced) or order book update
   useEffect(() => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
     
-    // Validate form before proceeding
     const isValid = formSchema.safeParse(watchedFormValues).success;
     if (!isValid) {
-       // Calculate fees even if form is partially invalid, if quantity and feeRate are numbers
       if (typeof watchedFormValues.quantity === 'number' && typeof watchedFormValues.feeRate === 'number') {
         const fees = watchedFormValues.quantity * watchedFormValues.feeRate;
         setOutputs(prev => ({ 
             ...prev, 
             expectedSlippage: null,
             marketImpact: null,
+            makerProportion: null,
+            takerProportion: null,
             expectedFees: fees, 
             netCost: fees 
         }));
       }
-      return; // Don't run simulation if form is invalid
+      return; 
     }
 
     debounceTimeoutRef.current = setTimeout(() => {
